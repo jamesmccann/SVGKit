@@ -312,6 +312,8 @@ CATextLayer *textLayerForLastTappedLayer;
 	if(
 	   [name  isEqualToString:@"Monkey"] // Monkey uses layer-animations, so REQUIRES the layered version of SVGKImageView
 	   || [name isEqualToString:@"RainbowWing"] // RainbodWing uses gradient-fills, so REQUIRES the layered version of SVGKImageView
+	   || [name isEqualToString:@"RotText"] // SVGKFastImageView is really slow
+	   || [name isEqualToString:@"Floorplan_Zurich.svg"] // SVGKFastImageView is really slow
 	   )
 	{
 		/**

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2B8D49BD171FEB1000BD4A78 /* Floorplan_Zurich.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2B8D49BB171FEB1000BD4A78 /* Floorplan_Zurich.svg */; };
+		2B8D49BE171FEB1000BD4A78 /* RotText.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2B8D49BC171FEB1000BD4A78 /* RotText.svg */; };
 		661A0DCF161727CF008D5FBE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 661A0DCE161727CF008D5FBE /* UIKit.framework */; };
 		661A0DD1161727CF008D5FBE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 661A0DD0161727CF008D5FBE /* Foundation.framework */; };
 		661A0DD3161727CF008D5FBE /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 661A0DD2161727CF008D5FBE /* CoreGraphics.framework */; };
@@ -82,6 +84,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2B8D49BB171FEB1000BD4A78 /* Floorplan_Zurich.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = Floorplan_Zurich.svg; sourceTree = "<group>"; };
+		2B8D49BC171FEB1000BD4A78 /* RotText.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = RotText.svg; sourceTree = "<group>"; };
 		661A0DCA161727CF008D5FBE /* Demo-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Demo-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		661A0DCE161727CF008D5FBE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		661A0DD0161727CF008D5FBE /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
@@ -164,6 +168,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2B8D49BA171FEB1000BD4A78 /* text */ = {
+			isa = PBXGroup;
+			children = (
+				2B8D49BB171FEB1000BD4A78 /* Floorplan_Zurich.svg */,
+				2B8D49BC171FEB1000BD4A78 /* RotText.svg */,
+			);
+			path = text;
+			sourceTree = "<group>";
+		};
 		661A0DBF161727CF008D5FBE = {
 			isa = PBXGroup;
 			children = (
@@ -274,6 +287,7 @@
 		66E8627B1688BA510059C9C4 /* SVG */ = {
 			isa = PBXGroup;
 			children = (
+				2B8D49BA171FEB1000BD4A78 /* text */,
 				663FCFEC16C9AF1C00CCBFB3 /* apache-licensed-from-svg-android */,
 				66A09C9F16CFE67B003CD5CD /* svg spec examples */,
 				663FD00316CAB16B00CCBFB3 /* groups-and-layers-test.svg */,
@@ -417,6 +431,8 @@
 				66324BE216D24FA4001C1E83 /* rounded-rects.svg in Resources */,
 				66E785AB171A228A001EF59D /* svg-with-explicit-width.svg in Resources */,
 				66E785AD171A2345001EF59D /* svg-with-explicit-width-large.svg in Resources */,
+				2B8D49BD171FEB1000BD4A78 /* Floorplan_Zurich.svg in Resources */,
+				2B8D49BE171FEB1000BD4A78 /* RotText.svg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
