@@ -109,10 +109,16 @@
                 if ([node isKindOfClass:[SVGTSpanElement class]]) {
                     SVGTSpanElement *tspanElement = (SVGTSpanElement *)node;
                     if (tspanElement.x.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
-                        _currentTextPosition.x = tspanElement.x.pixelsValue;
+                        _currentTextPosition.x = [self pixelValueForLength:tspanElement.x withFont:font];
                     }
                     if (tspanElement.y.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
-                        _currentTextPosition.y = tspanElement.y.pixelsValue;
+                        _currentTextPosition.y = [self pixelValueForLength:tspanElement.y withFont:font];
+                    }
+                    if (tspanElement.dx.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+                        _currentTextPosition.x += [self pixelValueForLength:tspanElement.dx withFont:font];
+                    }
+                    if (tspanElement.dy.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+                        _currentTextPosition.y += [self pixelValueForLength:tspanElement.dy withFont:font];
                     }
                     [self addLayersForElement:tspanElement toLayer:layer];
                 }
@@ -124,6 +130,15 @@
         }
     }
     CFRelease(font);
+}
+
+- (CGFloat)pixelValueForLength:(SVGLength *)length withFont:(CTFontRef)font
+{
+    if (length.unitType==SVG_LENGTHTYPE_EMS) {
+        return length.value*CTFontGetSize(font);
+    } else {
+        return length.pixelsValue;
+    }
 }
 
 

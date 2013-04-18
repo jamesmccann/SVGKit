@@ -25,6 +25,8 @@
         // Text
         [self.sampleNames addObject:@"RotText"];
         [self.sampleNames addObject:@"Floorplan_Zurich"];
+        // More svg spec examples
+        [self.sampleNames addObject:@"tspan02"];
     }
 	
 	/** Apple really sucks. They keep randomly changing which init methods they call, BREAKING ALL EXISTING CODE */
