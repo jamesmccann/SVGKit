@@ -19,6 +19,7 @@
     CGFloat _baseFontDescent;
     CGFloat _baseFontLeading;
     CGFloat _baseFontLineHeight;
+    BOOL _didAddTrailingSpace;
 }
 
 @synthesize transform; // each SVGElement subclass that conforms to protocol "SVGTransformable" has to re-synthesize this to work around bugs in Apple's Objective-C 2.0 design that don't allow @properties to be extended by categories / protocols
@@ -37,14 +38,14 @@
 	 */
 	CGAffineTransform textTransformAbsolute = [SVGHelperUtilities transformAbsoluteIncludingViewportForTransformableOrViewportEstablishingElement:self];
 
-    _currentTextPosition = CGPointMake(self.x.pixelsValue, self.y.pixelsValue);
-
+    // Set up the text elements base font
     _baseFont = [self newFontFromElement:self];
 	_baseFontAscent = CTFontGetAscent(_baseFont);
     _baseFontDescent = CTFontGetDescent(_baseFont);
     _baseFontLeading = CTFontGetLeading(_baseFont);
     _baseFontLineHeight = _baseFontAscent + _baseFontDescent + _baseFontLeading;
 
+    // Set up the main layer to put text in to
     CALayer *layer = [CALayer layer];
     [SVGHelperUtilities configureCALayer:layer usingElement:self];
     layer.bounds = CGRectMake(0, 0, 100, _baseFontAscent); // TODO[pdr] Fix bounds when all text has been layed out
@@ -53,12 +54,30 @@
     CGSize ap = CGSizeMake(0, _baseFontAscent/_baseFontLineHeight);
     layer.anchorPoint = CGPointMake(ap.width, ap.height);
     layer.position = CGPointMake(0, 0);
+
+    // Add sublayers for the text elements
+    _currentTextPosition = CGPointMake(self.x.pixelsValue, self.y.pixelsValue);
+    _didAddTrailingSpace = NO;
+    [self addLayersForElement:self toLayer:layer];
     
+    CFRelease(_baseFont);
+    _baseFont = NULL;
+
+    return [layer retain];
+}
+
+- (void)layoutLayer:(CALayer *)layer
+{
+}
+
+- (void)addLayersForElement:(SVGElement *)element toLayer:(CALayer *)layer
+{
     int nodeIndex = 0;
     int nodeCount = self.childNodes.length;
-    BOOL didAddTrailingSpace = NO;
-    
-    for (Node *node in self.childNodes) {
+
+    CTFontRef font = [self newFontFromElement:element];
+
+    for (Node *node in element.childNodes) {
         BOOL hasPreviousNode = (nodeIndex!=0);
         nodeIndex++;
         BOOL hasNextNode = (nodeIndex!=nodeCount);
@@ -70,22 +89,22 @@
                 BOOL hadLeadingSpace;
                 BOOL hadTrailingSpace;
                 NSString *text = [self stripText:node.textContent hadLeadingSpace:&hadLeadingSpace hadTrailingSpace:&hadTrailingSpace];
-                if (hasPreviousNode && hadLeadingSpace && !didAddTrailingSpace) {
+                if (hasPreviousNode && hadLeadingSpace && !_didAddTrailingSpace) {
                     text = [@" " stringByAppendingString:text];
                 }
                 if (hasNextNode && hadTrailingSpace) {
                     text = [text stringByAppendingString:@" "];
-                    didAddTrailingSpace = YES;
+                    _didAddTrailingSpace = YES;
                 } else {
-                    didAddTrailingSpace = NO;
+                    _didAddTrailingSpace = NO;
                 }
-                CAShapeLayer *label = [self layerWithText:text font:_baseFont];
-                [SVGHelperUtilities configureCALayer:label usingElement:self];
-                [SVGHelperUtilities applyStyleToShapeLayer:label withElement:self];
+                CAShapeLayer *label = [self layerWithText:text font:font];
+                [SVGHelperUtilities configureCALayer:label usingElement:element];
+                [SVGHelperUtilities applyStyleToShapeLayer:label withElement:element];
                 [layer addSublayer:label];
                 break;
             }
-
+                
             case DOMNodeType_ELEMENT_NODE: {
                 if ([node isKindOfClass:[SVGTSpanElement class]]) {
                     SVGTSpanElement *tspanElement = (SVGTSpanElement *)node;
@@ -95,45 +114,18 @@
                     if (tspanElement.y.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
                         _currentTextPosition.y = tspanElement.y.pixelsValue;
                     }
-                    CTFontRef tspanFont = [self newFontFromElement:tspanElement];
-                    BOOL hadLeadingSpace;
-                    BOOL hadTrailingSpace;
-                    NSString *text = [self stripText:node.textContent hadLeadingSpace:&hadLeadingSpace hadTrailingSpace:&hadTrailingSpace];
-                    if (hasPreviousNode && hadLeadingSpace && !didAddTrailingSpace) {
-                        text = [@" " stringByAppendingString:text];
-                    }
-                    if (hasNextNode && hadTrailingSpace) {
-                        text = [text stringByAppendingString:@" "];
-                        didAddTrailingSpace = YES;
-                    } else {
-                        didAddTrailingSpace = NO;
-                    }
-                    CAShapeLayer *label = [self layerWithText:text font:tspanFont];
-                    [SVGHelperUtilities configureCALayer:label usingElement:self];
-                    [SVGHelperUtilities applyStyleToShapeLayer:label withElement:tspanElement];
-                    [layer addSublayer:label];
-                    CFRelease(tspanFont);
-                    // TODO[pdr] Recurse in to child elements
+                    [self addLayersForElement:tspanElement toLayer:layer];
                 }
                 break;
             }
                 
-            default: {
-                NSLog(@"nodeType:%i", node.nodeType);
+            default:
                 break;
-            }
         }
     }
-    
-    CFRelease(_baseFont);
-    _baseFont = NULL;
-
-    return [layer retain];
+    CFRelease(font);
 }
 
-- (void)layoutLayer:(CALayer *)layer
-{
-}
 
 - (NSString *)stripText:(NSString *)text hadLeadingSpace:(BOOL *)hadLeadingSpace hadTrailingSpace:(BOOL *)hadTrailingSpace
 {
