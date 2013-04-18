@@ -10,6 +10,8 @@
 		2B8D49BD171FEB1000BD4A78 /* Floorplan_Zurich.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2B8D49BB171FEB1000BD4A78 /* Floorplan_Zurich.svg */; };
 		2B8D49BE171FEB1000BD4A78 /* RotText.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2B8D49BC171FEB1000BD4A78 /* RotText.svg */; };
 		2B8D49C01720245C00BD4A78 /* tspan02.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2B8D49BF1720245C00BD4A78 /* tspan02.svg */; };
+		2B8D49C217204D5B00BD4A78 /* Nested.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2B8D49C117204D5B00BD4A78 /* Nested.svg */; };
+		2B8D49C41720621300BD4A78 /* Skew.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2B8D49C31720621300BD4A78 /* Skew.svg */; };
 		661A0DCF161727CF008D5FBE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 661A0DCE161727CF008D5FBE /* UIKit.framework */; };
 		661A0DD1161727CF008D5FBE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 661A0DD0161727CF008D5FBE /* Foundation.framework */; };
 		661A0DD3161727CF008D5FBE /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 661A0DD2161727CF008D5FBE /* CoreGraphics.framework */; };
@@ -88,6 +90,8 @@
 		2B8D49BB171FEB1000BD4A78 /* Floorplan_Zurich.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = Floorplan_Zurich.svg; sourceTree = "<group>"; };
 		2B8D49BC171FEB1000BD4A78 /* RotText.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = RotText.svg; sourceTree = "<group>"; };
 		2B8D49BF1720245C00BD4A78 /* tspan02.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = tspan02.svg; sourceTree = "<group>"; };
+		2B8D49C117204D5B00BD4A78 /* Nested.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = Nested.svg; sourceTree = "<group>"; };
+		2B8D49C31720621300BD4A78 /* Skew.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = Skew.svg; sourceTree = "<group>"; };
 		661A0DCA161727CF008D5FBE /* Demo-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Demo-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		661A0DCE161727CF008D5FBE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		661A0DD0161727CF008D5FBE /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
@@ -234,6 +238,8 @@
 		66A09C9F16CFE67B003CD5CD /* svg spec examples */ = {
 			isa = PBXGroup;
 			children = (
+				2B8D49C31720621300BD4A78 /* Skew.svg */,
+				2B8D49C117204D5B00BD4A78 /* Nested.svg */,
 				2B8D49BF1720245C00BD4A78 /* tspan02.svg */,
 				66A09CA016CFE67B003CD5CD /* lingrad01.svg */,
 				66A09CA116CFE67B003CD5CD /* opacity01.svg */,
@@ -437,6 +443,8 @@
 				2B8D49BD171FEB1000BD4A78 /* Floorplan_Zurich.svg in Resources */,
 				2B8D49BE171FEB1000BD4A78 /* RotText.svg in Resources */,
 				2B8D49C01720245C00BD4A78 /* tspan02.svg in Resources */,
+				2B8D49C217204D5B00BD4A78 /* Nested.svg in Resources */,
+				2B8D49C41720621300BD4A78 /* Skew.svg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

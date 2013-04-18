@@ -27,6 +27,8 @@
         [self.sampleNames addObject:@"Floorplan_Zurich"];
         // More svg spec examples
         [self.sampleNames addObject:@"tspan02"];
+        [self.sampleNames addObject:@"Nested"];
+        [self.sampleNames addObject:@"Skew"];
     }
 	
 	/** Apple really sucks. They keep randomly changing which init methods they call, BREAKING ALL EXISTING CODE */
