@@ -6,11 +6,15 @@
 #import <UIKit/UIKit.h>
 #endif
 
+#import "CALayerWithChildHitTest.h"
 #import "SVGElement_ForParser.h" // to resolve Xcode circular dependencies; in long term, parsing SHOULD NOT HAPPEN inside any class whose name starts "SVG" (because those are reserved classes for the SVG Spec)
-
+#import "SVGTSpanElement.h"
 #import "SVGHelperUtilities.h"
 
 @implementation SVGTextElement
+{
+    CGPoint _currentTextPosition;
+}
 
 @synthesize transform; // each SVGElement subclass that conforms to protocol "SVGTransformable" has to re-synthesize this to work around bugs in Apple's Objective-C 2.0 design that don't allow @properties to be extended by categories / protocols
 
@@ -24,131 +28,287 @@
 	 BY DESIGN: we work out the positions of all text in ABSOLUTE space, and then construct the Apple CALayers and CATextLayers around
 	 them, as required.
 	 
-	 Because: Apple's classes REQUIRE us to provide a lot of this info up-front. Sigh
 	 And: SVGKit works by pre-baking everything into position (its faster, and avoids Apple's broken CALayer.transform property)
-	 */
-	CGAffineTransform textTransformAbsolute = [SVGHelperUtilities transformAbsoluteIncludingViewportForTransformableOrViewportEstablishingElement:self];
-	/** add on the local x,y that will NOT BE iNCLUDED IN THE TRANSFORM
-	 AUTOMATICALLY BECAUSE THEY ARE NOT TRANSFORM COMMANDS IN SVG SPEC!!
-	 -- but they ARE part of the "implicit transform" of text elements!! (bad SVG Spec design :( )
-	 
-	 NB: the local bits (x/y offset) have to be pre-transformed by
-	 */
-	CGAffineTransform textTransformAbsoluteWithLocalPositionOffset = CGAffineTransformConcat( CGAffineTransformMakeTranslation( [self.x pixelsValue], [self.y pixelsValue]), textTransformAbsolute);
-	
-	/**
-	 Apple's CATextLayer is poor - one of those classes Apple hasn't finished writing?
-	 
-	 It's incompatible with UIFont (Apple states it is so), and it DOES NOT WORK by default:
-	 
-	 If you assign a font, and a font size, and text ... you get a blank empty layer of
-	 size 0,0
-	 
-	 Because Apple requires you to ALSO do all the work of calculating the font size, shape,
-	 position etc.
-	 
-	 But its the easiest way to get FULL control over size/position/rotation/etc in a CALayer
 	 */
 	NSString* actualSize = [self cascadedValueForStylableProperty:@"font-size"];
 	NSString* actualFamily = [self cascadedValueForStylableProperty:@"font-family"];
 	
 	CGFloat effectiveFontSize = (actualSize.length > 0) ? [actualSize floatValue] : 12; // I chose 12. I couldn't find an official "default" value in the SVG spec.
-	/** Convert the size down using the SVG transform at this point, before we calc the frame size etc */
-//	effectiveFontSize = CGSizeApplyAffineTransform( CGSizeMake(0,effectiveFontSize), textTransformAbsolute ).height; // NB important that we apply a transform to a "CGSize" here, so that Apple's library handles worrying about whether to ignore skew transforms etc
-	
-	/** find a valid font reference, or Apple's APIs will break later */
-	/** undocumented Apple bug: CTFontCreateWithName cannot accept nil input*/
-	CTFontRef font = NULL;
-	if( actualFamily != nil)
-		font = CTFontCreateWithName( (CFStringRef)actualFamily, effectiveFontSize, NULL);
-	if( font == NULL )
-		font = CTFontCreateWithName( (CFStringRef) @"Verdana", effectiveFontSize, NULL); // Spec says to use "whatever default font-family is normal for your system". On iOS, that's Verdana
-	
-	/** Convert all whitespace to spaces, and trim leading/trailing (SVG doesn't support leading/trailing whitespace, and doesnt support CR LF etc) */
-	
-	NSString* effectiveText = self.textContent; // FIXME: this is a TEMPORARY HACK, UNTIL PROPER PARSING OF <TSPAN> ELEMENTS IS ADDED
-	
-	effectiveText = [effectiveText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	effectiveText = [effectiveText stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
-	
-	/** Calculate 
-	 
-	 1. Create an attributed string (Apple's APIs are hard-coded to require this)
-	 2. Set the font to be the correct one + correct size for whole string, inside the string
-	 3. Ask apple how big the final thing should be
-	 4. Use that to provide a layer.frame
-	 */
-	NSMutableAttributedString* tempString = [[[NSMutableAttributedString alloc] initWithString:effectiveText] autorelease];
-	[tempString addAttribute:(NSString *)kCTFontAttributeName
-					  value:(id)font
-					  range:NSMakeRange(0, tempString.string.length)];
-	CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString( (CFMutableAttributedStringRef) tempString );
-    CGSize suggestedUntransformedSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRangeMake(0, 0), NULL, CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX), NULL);
-    CFRelease(framesetter);
-	
-	CGRect unTransformedFinalBounds = CGRectMake( 0,
-											  0,
-											  suggestedUntransformedSize.width,
-											  suggestedUntransformedSize.height); // everything's been pre-scaled by [self transformAbsolute]
-	
-    CATextLayer *label = [[CATextLayer alloc] init];
-    [SVGHelperUtilities configureCALayer:label usingElement:self];
-	
-    label.font = font; /** WARNING: Apple docs say you "CANNOT" assign a UIFont instance here, for some reason they didn't bridge it with CGFont */
-  CFRelease(font);
-	
-	/** This is complicated for three reasons.
-	 Partly: Apple and SVG use different defitions for the "origin" of a piece of text
-	 Partly: Bugs in Apple's CoreText
-	 Partly: flaws in Apple's CALayer's handling of frame,bounds,position,anchorPoint,affineTransform
-	 
-	 1. CALayer.frame DOES NOT EXIST AS A REAL PROPERTY - if you read Apple's docs you eventually realise it is fake. Apple explicitly says it is "not defined". They should DELETE IT from their API!
-	 2. CALayer.bounds and .position ARE NOT AFFECTED BY .affineTransform - only the contents of the layer is affected
-	 3. SVG defines two SEMI-INCOMPATIBLE ways of positioning TEXT objects, that we have to correctly combine here.
-	 4. So ... to apply a transform to the layer text:
-	     i. find the TRANSFORM
-	     ii. merge it with the local offset (.x and .y from SVG) - which defaults to (0,0)
-	     iii. apply that to the layer
-	     iv. set the position to 0
-	     v. BECAUSE SVG AND APPLE DEFINE ORIGIN DIFFERENTLY: subtract the "untransformed" height of the font ... BUT: pre-transformed ONLY BY the 'multiplying (non-translating)' part of the TRANSFORM.
-	     vi. set the bounds to be (whatever Apple's CoreText says is necessary to render TEXT at FONT SIZE, with NO TRANSFORMS)
-	 */
-    label.bounds = unTransformedFinalBounds;
-	
-	/** NB: specific to Apple: the "origin" is the TOP LEFT corner of first line of text, whereas SVG uses the font's internal origin
-	 (which is BOTTOM LEFT CORNER OF A LETTER SUCH AS 'a' OR 'x' THAT SITS ON THE BASELINE ... so we have to make the FRAME start "font leading" higher up
-	 
-	 WARNING: Apple's font-rendering system has some nasty bugs (c.f. StackOverflow)
-	 
-	 We TRIED to use the font's built-in numbers to correct the position, but Apple's own methods often report incorrect values,
-	 and/or Apple has deprecated REQUIRED methods in their API (with no explanation - e.g. "font leading")
-	 
-	 If/when Apple fixes their bugs - or if you know enough about their API's to workaround the bugs, feel free to fix this code.
-	 */
-	CGFloat offsetToConvertSVGOriginToAppleOrigin = - suggestedUntransformedSize.height;
-	CGSize fakeSizeToApplyNonTranslatingPartsOfTransform = CGSizeMake( 0, offsetToConvertSVGOriginToAppleOrigin);
-	
-	label.position = CGPointMake( 0,
-								 0 + CGSizeApplyAffineTransform( fakeSizeToApplyNonTranslatingPartsOfTransform, textTransformAbsoluteWithLocalPositionOffset).height);
-	label.anchorPoint = CGPointZero; // WARNING: SVG applies transforms around the top-left as origin, whereas Apple defaults to center as origin, so we tell Apple to work "like SVG" here.
-	label.affineTransform = textTransformAbsoluteWithLocalPositionOffset;
-	label.fontSize = effectiveFontSize;
-    label.string = effectiveText;
-    label.alignmentMode = kCAAlignmentLeft;
-    label.foregroundColor = [UIColor blackColor].CGColor;
 
-	/** VERY USEFUL when trying to debug text issues:
-	label.backgroundColor = [UIColor colorWithRed:0.5 green:0 blue:0 alpha:0.5].CGColor;
-	label.borderColor = [UIColor redColor].CGColor;
-	//DEBUG: NSLog(@"font size %2.1f at %@ ... final frame of layer = %@", effectiveFontSize, NSStringFromCGPoint(transformedOrigin), NSStringFromCGRect(label.frame));
-	*/
+    UIFont *font = nil;
+    if (actualFamily) {
+        font = [UIFont fontWithName:actualFamily size:effectiveFontSize];
+    }
+    if (!font) {
+        font = [UIFont systemFontOfSize:effectiveFontSize];
+    }
 	
-    return label;
+	CGAffineTransform textTransformAbsolute = [SVGHelperUtilities transformAbsoluteIncludingViewportForTransformableOrViewportEstablishingElement:self];
+
+    _currentTextPosition = CGPointMake(self.x.pixelsValue, self.y.pixelsValue);
+
+    CALayer *layer = [CALayer layer];
+    [SVGHelperUtilities configureCALayer:layer usingElement:self];
+    layer.bounds = CGRectMake(0, 0, 100, font.ascender); // TODO[pdr] Fix bounds when all text has been layed out
+    // layer.backgroundColor = [UIColor colorWithRed:0 green:0 blue:1 alpha:0.5].CGColor;
+    layer.affineTransform = textTransformAbsolute;
+    CGSize ap = CGSizeMake(0, font.ascender/font.lineHeight);
+    layer.anchorPoint = CGPointMake(ap.width, ap.height);
+    layer.position = CGPointMake(0, 0);
+    
+    int nodeIndex = 0;
+    int nodeCount = self.childNodes.length;
+    BOOL didAddTrailingSpace = NO;
+    
+    for (Node *node in self.childNodes) {
+        BOOL hasPreviousNode = (nodeIndex!=0);
+        nodeIndex++;
+        BOOL hasNextNode = (nodeIndex!=nodeCount);
+        
+        NSLog(@"currentTextPosition : %@", NSStringFromCGPoint(_currentTextPosition));
+        NSLog(@"node.nextSibling : %@", node.nextSibling);
+        switch (node.nodeType) {
+            case DOMNodeType_TEXT_NODE: {
+                BOOL hadLeadingSpace;
+                BOOL hadTrailingSpace;
+                NSString *text = [self stripText:node.textContent hadLeadingSpace:&hadLeadingSpace hadTrailingSpace:&hadTrailingSpace];
+                if (hasPreviousNode && hadLeadingSpace && !didAddTrailingSpace) {
+                    text = [@" " stringByAppendingString:text];
+                }
+                if (hasNextNode && hadTrailingSpace) {
+                    text = [text stringByAppendingString:@" "];
+                    didAddTrailingSpace = YES;
+                } else {
+                    didAddTrailingSpace = NO;
+                }
+                CAShapeLayer *label = [self layerWithText:text font:font];
+                [SVGHelperUtilities configureCALayer:label usingElement:self];
+                [SVGHelperUtilities applyStyleToShapeLayer:label withElement:self];
+                [layer addSublayer:label];
+                break;
+            }
+
+            case DOMNodeType_ELEMENT_NODE: {
+                if ([node isKindOfClass:[SVGTSpanElement class]]) {
+                    SVGTSpanElement *tspanElement = (SVGTSpanElement *)node;
+                    if (tspanElement.x.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+                        _currentTextPosition.x = tspanElement.x.pixelsValue;
+                    }
+                    if (tspanElement.y.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+                        _currentTextPosition.y = tspanElement.y.pixelsValue;
+                    }
+                    NSString* actualSize = [tspanElement cascadedValueForStylableProperty:@"font-size"];
+                    NSString* actualFamily = [tspanElement cascadedValueForStylableProperty:@"font-family"];
+                    CGFloat tspanFontSize = (actualSize.length > 0) ? [actualSize floatValue] : 12; // I chose 12. I couldn't find an official "default" value in the SVG spec.
+                    UIFont *tspanFont = nil;
+                    if (actualFamily) {
+                        tspanFont = [UIFont fontWithName:actualFamily size:tspanFontSize];
+                    }
+                    if (!tspanFont) {
+                        tspanFont = [UIFont systemFontOfSize:tspanFontSize];
+                    }
+                    BOOL hadLeadingSpace;
+                    BOOL hadTrailingSpace;
+                    NSString *text = [self stripText:node.textContent hadLeadingSpace:&hadLeadingSpace hadTrailingSpace:&hadTrailingSpace];
+                    if (hasPreviousNode && hadLeadingSpace && !didAddTrailingSpace) {
+                        text = [@" " stringByAppendingString:text];
+                    }
+                    if (hasNextNode && hadTrailingSpace) {
+                        text = [text stringByAppendingString:@" "];
+                        didAddTrailingSpace = YES;
+                    } else {
+                        didAddTrailingSpace = NO;
+                    }
+                    CAShapeLayer *label = [self layerWithText:text font:tspanFont];
+                    [SVGHelperUtilities configureCALayer:label usingElement:self];
+                    [SVGHelperUtilities applyStyleToShapeLayer:label withElement:tspanElement];
+                    // Use baseline of font to align vertically
+                    CGRect b = label.bounds;
+                    b.origin.y = -font.ascender-font.descender;
+                    b.size.height = font.ascender;
+                    label.bounds = b;
+                    [layer addSublayer:label];
+                    // TODO[pdr] Recurse in to child elements
+                }
+                break;
+            }
+                
+            default: {
+                NSLog(@"nodeType:%i", node.nodeType);
+                break;
+            }
+        }
+    }
+
+    return [layer retain];
 }
 
 - (void)layoutLayer:(CALayer *)layer
 {
-	
+    NSLog(@"layoutLayer:");
+}
+
+- (NSString *)stripText:(NSString *)text hadLeadingSpace:(BOOL *)hadLeadingSpace hadTrailingSpace:(BOOL *)hadTrailingSpace
+{
+    // Remove all newline characters
+    text = [text stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+    // Convert tabs into spaces
+    text = [text stringByReplacingOccurrencesOfString:@"\t" withString:@" "];
+    // Consolidate all contiguous space characters
+    while ([text rangeOfString:@"  "].location != NSNotFound) {
+        text = [text stringByReplacingOccurrencesOfString:@"  " withString:@" "];
+    }
+    if (hadLeadingSpace) {
+        *hadLeadingSpace = (text.length==0 ? NO : [[text substringWithRange:NSMakeRange(0, 1)] isEqualToString:@" "]);
+    }
+    if (hadTrailingSpace) {
+        *hadTrailingSpace = (text.length==0 ? NO : [[text substringFromIndex:text.length-1] isEqualToString:@" "]);
+    }
+    // Remove leading and trailing spaces
+    text = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    return text;
+}
+
+#pragma mark -
+
+- (CAShapeLayer *)layerWithText:(NSString *)text font:(UIFont *)font
+{
+    CAShapeLayer *label = [CAShapeLayer layer];
+    label.anchorPoint = CGPointZero;
+    label.position = _currentTextPosition;
+    // Create path from the text
+    UIBezierPath *textPath = [self bezierPathWithString:text font:font inRect:CGRectMake(0, 0, FLT_MAX, FLT_MAX)];
+    label.path = textPath.CGPath;
+    // Use font baseline for alignment
+    CGRect b = textPath.bounds;
+    b.origin.x = 0;
+    b.origin.y = -font.ascender-font.descender;
+    b.size.height = font.ascender;
+    label.bounds = b;
+    //label.borderColor = [UIColor redColor].CGColor;
+    //label.borderWidth = 1;
+    NSLog(@"text:'%@' => %@", text, NSStringFromCGRect(label.bounds));
+    return label;
+}
+
+
+// Requires CoreText.framework
+// This creates a graphical version of the input screen, line wrapped to the input rect.
+// Core Text involves a whole hierarchy of objects, all requiring manual management.
+- (UIBezierPath*) bezierPathWithString:(NSString*) string font:(UIFont*) font inRect:(CGRect) rect;
+{
+    UIBezierPath *combinedGlyphsPath = nil;
+    CGMutablePathRef combinedGlyphsPathRef = CGPathCreateMutable();
+    if (combinedGlyphsPathRef)
+    {
+        // It would be easy to wrap the text into a different shape, including arbitrary bezier paths, if needed.
+        UIBezierPath *frameShape = [UIBezierPath bezierPathWithRect:rect];
+        
+        // If the font name wasn't found while creating the font object, the result is a crash.
+        // Avoid this by falling back to the system font.
+        CTFontRef fontRef;
+        if ([font fontName])
+            fontRef = CTFontCreateWithName((__bridge CFStringRef) [font fontName], [font pointSize], NULL);
+        else if (font)
+            fontRef = CTFontCreateUIFontForLanguage(kCTFontUserFontType, [font pointSize], NULL);
+        else
+            fontRef = CTFontCreateUIFontForLanguage(kCTFontUserFontType, [UIFont systemFontSize], NULL);
+        
+        if (fontRef)
+        {
+            CGPoint basePoint = CGPointMake(_currentTextPosition.x, CTFontGetAscent(fontRef));
+            CFStringRef keys[] = { kCTFontAttributeName };
+            CFTypeRef values[] = { fontRef };
+            CFDictionaryRef attributesRef = CFDictionaryCreate(NULL, (const void **)&keys, (const void **)&values,
+                                                               sizeof(keys) / sizeof(keys[0]), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+            
+            if (attributesRef)
+            {
+                CFAttributedStringRef attributedStringRef = CFAttributedStringCreate(NULL, (__bridge CFStringRef) string, attributesRef);
+                
+                if (attributedStringRef)
+                {
+                    CTFramesetterRef frameSetterRef = CTFramesetterCreateWithAttributedString(attributedStringRef);
+                    
+                    if (frameSetterRef)
+                    {
+                        CTFrameRef frameRef = CTFramesetterCreateFrame(frameSetterRef, CFRangeMake(0,0), [frameShape CGPath], NULL);
+                        
+                        if (frameRef)
+                        {
+                            CFArrayRef lines = CTFrameGetLines(frameRef);
+                            CFIndex lineCount = CFArrayGetCount(lines);
+                            CGPoint lineOrigins[lineCount];
+                            CTFrameGetLineOrigins(frameRef, CFRangeMake(0, lineCount), lineOrigins);
+                            
+                            for (CFIndex lineIndex = 0; lineIndex<lineCount; lineIndex++)
+                            {
+                                CTLineRef lineRef = CFArrayGetValueAtIndex(lines, lineIndex);
+                                CGPoint lineOrigin = lineOrigins[lineIndex];
+                                
+                                CFArrayRef runs = CTLineGetGlyphRuns(lineRef);
+                                
+                                CFIndex runCount = CFArrayGetCount(runs);
+                                for (CFIndex runIndex = 0; runIndex<runCount; runIndex++)
+                                {
+                                    CTRunRef runRef = CFArrayGetValueAtIndex(runs, runIndex);
+                                    
+                                    CFIndex glyphCount = CTRunGetGlyphCount(runRef);
+                                    CGGlyph glyphs[glyphCount];
+                                    CGSize glyphAdvances[glyphCount];
+                                    CGPoint glyphPositions[glyphCount];
+                                    
+                                    CFRange runRange = CFRangeMake(0, glyphCount);
+                                    CTRunGetGlyphs(runRef, CFRangeMake(0, glyphCount), glyphs);
+                                    CTRunGetPositions(runRef, runRange, glyphPositions);
+                                    
+                                    CTFontGetAdvancesForGlyphs(fontRef, kCTFontDefaultOrientation, glyphs, glyphAdvances, glyphCount);
+                                    
+                                    for (CFIndex glyphIndex = 0; glyphIndex<glyphCount; glyphIndex++)
+                                    {
+                                        CGGlyph glyph = glyphs[glyphIndex];
+                                        
+                                        // For regular UIBezierPath drawing, we need to invert around the y axis.
+                                        CGAffineTransform glyphTransform = CGAffineTransformMakeTranslation(lineOrigin.x+glyphPositions[glyphIndex].x, rect.size.height-lineOrigin.y-glyphPositions[glyphIndex].y);
+                                        glyphTransform = CGAffineTransformScale(glyphTransform, 1, -1);
+                                        // TODO[pdr] Idea for handling rotate: glyphTransform = CGAffineTransformRotate(glyphTransform, M_PI/8);
+                                        
+                                        CGPathRef glyphPathRef = CTFontCreatePathForGlyph(fontRef, glyph, &glyphTransform);
+                                        if (glyphPathRef)
+                                        {
+                                            // Finally carry out the appending.
+                                            CGPathAddPath(combinedGlyphsPathRef, NULL, glyphPathRef);
+                                            CFRelease(glyphPathRef);
+                                        }
+                                        
+                                        basePoint.x += glyphAdvances[glyphIndex].width;
+                                        basePoint.y += glyphAdvances[glyphIndex].height;
+                                        NSLog(@"'%@' => %@", [string substringWithRange:NSMakeRange(glyphIndex, 1)], NSStringFromCGPoint(basePoint));
+                                    }
+                                }
+                                _currentTextPosition.x = basePoint.x; // TODO[pdr]
+                                // TODO[pdr] Only one line
+                                basePoint.x = 0;
+                                basePoint.y += CTFontGetAscent(fontRef) + CTFontGetDescent(fontRef) + CTFontGetLeading(fontRef);
+                            }
+                            
+                            CFRelease(frameRef);
+                        }
+                        
+                        CFRelease(frameSetterRef);
+                    }
+                    CFRelease(attributedStringRef);
+                }
+                CFRelease(attributesRef);
+            }
+            CFRelease(fontRef);
+        }
+        // Casting a CGMutablePathRef to a CGPathRef seems to be the only way to convert what was just built into a UIBezierPath.
+        combinedGlyphsPath = [UIBezierPath bezierPathWithCGPath:(CGPathRef) combinedGlyphsPathRef];
+        
+        CGPathRelease(combinedGlyphsPathRef);
+    }
+    return combinedGlyphsPath;
 }
 
 @end
