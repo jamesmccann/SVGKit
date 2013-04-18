@@ -56,7 +56,6 @@
     layer.position = CGPointMake(0, 0);
 
     // Add sublayers for the text elements
-    _currentTextPosition = CGPointMake(self.x.pixelsValue, self.y.pixelsValue);
     _didAddTrailingSpace = NO;
     [self addLayersForElement:self toLayer:layer];
     
@@ -70,12 +69,37 @@
 {
 }
 
-- (void)addLayersForElement:(SVGElement *)element toLayer:(CALayer *)layer
+
+#pragma mark -
+
+- (void)updateCurrentTextPositionBasedOnElement:(SVGTextPositioningElement *)element font:(CTFontRef)font
+{
+    if (element.x.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+        _currentTextPosition.x = [self pixelValueForLength:element.x withFont:font];
+    } else if ([element isKindOfClass:[SVGTextElement class]]) {
+        _currentTextPosition.x = 0;
+    }
+    if (element.y.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+        _currentTextPosition.y = [self pixelValueForLength:element.y withFont:font];
+    } else if ([element isKindOfClass:[SVGTextElement class]]) {
+        _currentTextPosition.y = 0;
+    }
+    if (element.dx.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+        _currentTextPosition.x += [self pixelValueForLength:element.dx withFont:font];
+    }
+    if (element.dy.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
+        _currentTextPosition.y += [self pixelValueForLength:element.dy withFont:font];
+    }
+}
+
+
+- (void)addLayersForElement:(SVGTextPositioningElement *)element toLayer:(CALayer *)layer
 {
     int nodeIndex = 0;
     int nodeCount = self.childNodes.length;
 
     CTFontRef font = [self newFontFromElement:element];
+    [self updateCurrentTextPositionBasedOnElement:element font:font];
 
     for (Node *node in element.childNodes) {
         BOOL hasPreviousNode = (nodeIndex!=0);
@@ -108,18 +132,6 @@
             case DOMNodeType_ELEMENT_NODE: {
                 if ([node isKindOfClass:[SVGTSpanElement class]]) {
                     SVGTSpanElement *tspanElement = (SVGTSpanElement *)node;
-                    if (tspanElement.x.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
-                        _currentTextPosition.x = [self pixelValueForLength:tspanElement.x withFont:font];
-                    }
-                    if (tspanElement.y.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
-                        _currentTextPosition.y = [self pixelValueForLength:tspanElement.y withFont:font];
-                    }
-                    if (tspanElement.dx.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
-                        _currentTextPosition.x += [self pixelValueForLength:tspanElement.dx withFont:font];
-                    }
-                    if (tspanElement.dy.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
-                        _currentTextPosition.y += [self pixelValueForLength:tspanElement.dy withFont:font];
-                    }
                     [self addLayersForElement:tspanElement toLayer:layer];
                 }
                 break;
