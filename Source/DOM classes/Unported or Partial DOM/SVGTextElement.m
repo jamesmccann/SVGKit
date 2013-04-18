@@ -48,10 +48,10 @@
     // Set up the main layer to put text in to
     CALayer *layer = [CALayer layer];
     [SVGHelperUtilities configureCALayer:layer usingElement:self];
-    layer.bounds = CGRectMake(0, 0, 100, _baseFontAscent); // TODO[pdr] Fix bounds when all text has been layed out
+    layer.bounds = CGRectMake(0, 0, 100, _baseFontAscent+_baseFontDescent); // TODO[pdr] Fix bounds when all text has been layed out
     // layer.backgroundColor = [UIColor colorWithRed:0 green:0 blue:1 alpha:0.5].CGColor;
     layer.affineTransform = textTransformAbsolute;
-    CGSize ap = CGSizeMake(0, _baseFontAscent/_baseFontLineHeight);
+    CGSize ap = CGSizeMake(0, _baseFontAscent/(_baseFontAscent+_baseFontDescent));
     layer.anchorPoint = CGPointMake(ap.width, ap.height);
     layer.position = CGPointMake(0, 0);
 
@@ -217,11 +217,10 @@
     // Use font baseline for alignment
     CGRect b = textPath.bounds;
     b.origin.x = 0;
-    b.origin.y = -_baseFontAscent+_baseFontDescent;
-    b.size.height = _baseFontAscent;
+    b.origin.y = -_baseFontAscent;
+    b.size.height = _baseFontAscent+_baseFontDescent;
     label.bounds = b;
-    //label.borderColor = [UIColor redColor].CGColor;
-    //label.borderWidth = 1;
+    //label.backgroundColor = [UIColor yellowColor].CGColor;
     NSLog(@"text:'%@' => %@", text, NSStringFromCGRect(label.bounds));
     return label;
 }
