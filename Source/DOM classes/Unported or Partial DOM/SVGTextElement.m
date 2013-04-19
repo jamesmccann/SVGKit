@@ -11,6 +11,7 @@
 #import "SVGTSpanElement.h"
 #import "SVGHelperUtilities.h"
 
+
 @implementation SVGTextElement
 {
     CGPoint _currentTextPosition;
@@ -36,7 +37,6 @@
 	 
 	 And: SVGKit works by pre-baking everything into position (its faster, and avoids Apple's broken CALayer.transform property)
 	 */
-	CGAffineTransform textTransformAbsolute = [SVGHelperUtilities transformAbsoluteIncludingViewportForTransformableOrViewportEstablishingElement:self];
 
     // Set up the text elements base font
     _baseFont = [self newFontFromElement:self];
@@ -48,19 +48,19 @@
     // Set up the main layer to put text in to
     CALayer *layer = [CALayer layer];
     [SVGHelperUtilities configureCALayer:layer usingElement:self];
-    layer.bounds = CGRectMake(0, 0, 100, _baseFontAscent+_baseFontDescent); // TODO[pdr] Fix bounds when all text has been layed out
-    // layer.backgroundColor = [UIColor colorWithRed:0 green:0 blue:1 alpha:0.5].CGColor;
-    layer.affineTransform = textTransformAbsolute;
-    CGSize ap = CGSizeMake(0, _baseFontAscent/(_baseFontAscent+_baseFontDescent));
-    layer.anchorPoint = CGPointMake(ap.width, ap.height);
+    // Don't care about the size - the sublayers containing text will be positioned relative to the baseline of _baseFont
+    layer.bounds = CGRectMake(0, 0, 0, _baseFontAscent+_baseFontDescent);
+    // Position the anchor point at the base font's baseline so that the text elements transform are applied properly
+    layer.anchorPoint = CGPointMake(0, _baseFontAscent/(_baseFontAscent+_baseFontDescent));
     layer.position = CGPointMake(0, 0);
+    // Transform according to 
+    layer.affineTransform = [SVGHelperUtilities transformAbsoluteIncludingViewportForTransformableOrViewportEstablishingElement:self];;
 
     // Add sublayers for the text elements
     _didAddTrailingSpace = NO;
     [self addLayersForElement:self toLayer:layer];
     
     CFRelease(_baseFont);
-    _baseFont = NULL;
 
     return [layer retain];
 }
@@ -72,6 +72,9 @@
 
 #pragma mark -
 
+/**
+ * Handling x, y, dx, and dy according to http://www.w3.org/TR/SVG/text.html
+ */
 - (void)updateCurrentTextPositionBasedOnElement:(SVGTextPositioningElement *)element font:(CTFontRef)font
 {
     if (element.x.unitType!=SVG_LENGTHTYPE_UNKNOWN) {
@@ -95,16 +98,12 @@
 
 - (void)addLayersForElement:(SVGTextPositioningElement *)element toLayer:(CALayer *)layer
 {
-    int nodeIndex = 0;
-    int nodeCount = self.childNodes.length;
-
     CTFontRef font = [self newFontFromElement:element];
     [self updateCurrentTextPositionBasedOnElement:element font:font];
 
     for (Node *node in element.childNodes) {
-        BOOL hasPreviousNode = (nodeIndex!=0);
-        nodeIndex++;
-        BOOL hasNextNode = (nodeIndex!=nodeCount);
+        BOOL hasPreviousNode = (node!=element.firstChild);
+        BOOL hasNextNode = (node!=element.lastChild);
         
         NSLog(@"currentTextPosition : %@", NSStringFromCGPoint(_currentTextPosition));
         NSLog(@"node.nextSibling : %@", node.nextSibling);
@@ -122,10 +121,12 @@
                 } else {
                     _didAddTrailingSpace = NO;
                 }
-                CAShapeLayer *label = [self layerWithText:text font:font];
-                [SVGHelperUtilities configureCALayer:label usingElement:element];
-                [SVGHelperUtilities applyStyleToShapeLayer:label withElement:element];
-                [layer addSublayer:label];
+                if (text.length>0) {
+                    CAShapeLayer *label = [self layerWithText:text font:font];
+                    [SVGHelperUtilities configureCALayer:label usingElement:element];
+                    [SVGHelperUtilities applyStyleToShapeLayer:label withElement:element];
+                    [layer addSublayer:label];
+                }
                 break;
             }
                 
@@ -212,30 +213,30 @@
     label.anchorPoint = CGPointZero;
     label.position = _currentTextPosition;
     // Create path from the text
-    UIBezierPath *textPath = [self bezierPathWithString:text font:font inRect:CGRectMake(0, 0, FLT_MAX, FLT_MAX)];
+    CGFloat xStart = _currentTextPosition.x;
+    UIBezierPath *textPath = [self bezierPathWithString:text font:font];
+    // Bounding and alignment with _baseFont baseline
+    CGFloat fontAscent = CTFontGetAscent(font);
+    CGFloat fontDescent = CTFontGetDescent(font);
     label.path = textPath.CGPath;
-    // Use font baseline for alignment
-    CGRect b = textPath.bounds;
-    b.origin.x = 0;
-    b.origin.y = -_baseFontAscent;
-    b.size.height = _baseFontAscent+_baseFontDescent;
-    label.bounds = b;
-    //label.backgroundColor = [UIColor yellowColor].CGColor;
-    NSLog(@"text:'%@' => %@", text, NSStringFromCGRect(label.bounds));
+    CGPoint position = label.position;
+    position.y += -(fontAscent-_baseFontAscent);
+    label.position = position;
+    label.bounds = CGRectMake(0, -fontAscent, _currentTextPosition.x-xStart, fontAscent+fontDescent);
     return label;
 }
 
-
-// Requires CoreText.framework
-// This creates a graphical version of the input screen, line wrapped to the input rect.
-// Core Text involves a whole hierarchy of objects, all requiring manual management.
-- (UIBezierPath*)bezierPathWithString:(NSString*)string font:(CTFontRef)fontRef inRect:(CGRect)rect;
+/**
+ * Create a UIBezierPath rendering string in font.
+ * textPath: Have a look at http://iphonedevsdk.com/forum/iphone-sdk-development/101053-cgpath-help.html
+ */
+- (UIBezierPath*)bezierPathWithString:(NSString*)string font:(CTFontRef)fontRef
 {
     UIBezierPath *combinedGlyphsPath = nil;
     CGMutablePathRef combinedGlyphsPathRef = CGPathCreateMutable();
     if (combinedGlyphsPathRef)
     {
-        // It would be easy to wrap the text into a different shape, including arbitrary bezier paths, if needed.
+        CGRect rect = CGRectMake(0, 0, FLT_MAX, FLT_MAX);
         UIBezierPath *frameShape = [UIBezierPath bezierPathWithRect:rect];
         
         CGPoint basePoint = CGPointMake(_currentTextPosition.x, CTFontGetAscent(fontRef));
@@ -259,14 +260,10 @@
                     if (frameRef)
                     {
                         CFArrayRef lines = CTFrameGetLines(frameRef);
-                        CFIndex lineCount = CFArrayGetCount(lines);
-                        CGPoint lineOrigins[lineCount];
-                        CTFrameGetLineOrigins(frameRef, CFRangeMake(0, lineCount), lineOrigins);
-                        
-                        for (CFIndex lineIndex = 0; lineIndex<lineCount; lineIndex++)
-                        {
-                            CTLineRef lineRef = CFArrayGetValueAtIndex(lines, lineIndex);
-                            CGPoint lineOrigin = lineOrigins[lineIndex];
+                        if (CFArrayGetCount(lines)==1) {
+                            CGPoint lineOrigin;
+                            CTFrameGetLineOrigins(frameRef, CFRangeMake(0, 1), &lineOrigin);
+                            CTLineRef lineRef = CFArrayGetValueAtIndex(lines, 0);
                             
                             CFArrayRef runs = CTLineGetGlyphRuns(lineRef);
                             
@@ -305,18 +302,13 @@
                                     
                                     basePoint.x += glyphAdvances[glyphIndex].width;
                                     basePoint.y += glyphAdvances[glyphIndex].height;
-                                    NSLog(@"'%@' => %@", [string substringWithRange:NSMakeRange(glyphIndex, 1)], NSStringFromCGPoint(basePoint));
+                                    //NSLog(@"'%@' => %@", [string substringWithRange:NSMakeRange(glyphIndex, 1)], NSStringFromCGPoint(basePoint));
                                 }
+                                _currentTextPosition.x = basePoint.x; // TODO[pdr]
                             }
-                            _currentTextPosition.x = basePoint.x; // TODO[pdr]
-                            // TODO[pdr] Only one line
-                            basePoint.x = 0;
-                            basePoint.y += CTFontGetAscent(fontRef) + CTFontGetDescent(fontRef) + CTFontGetLeading(fontRef);
                         }
-                        
                         CFRelease(frameRef);
                     }
-                    
                     CFRelease(frameSetterRef);
                 }
                 CFRelease(attributedStringRef);
