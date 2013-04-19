@@ -257,6 +257,15 @@
 	return (self.childNodes.length > 0);
 }
 
+- (Node *)firstChild
+{
+    return (self.childNodes.length==0 ? nil : [self.childNodes item:0]);
+}
+
+- (Node *)lastChild
+{
+    return (self.childNodes.length==0 ? nil : [self.childNodes item:self.childNodes.length-1]);
+}
 -(Node*) cloneNode:(BOOL) deep
 {
 	NSAssert( FALSE, @"Not implemented yet - read the spec. Sounds tricky. I'm too tired, and would probably screw it up right now" );
