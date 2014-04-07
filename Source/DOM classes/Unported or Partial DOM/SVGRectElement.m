@@ -6,7 +6,9 @@
 
 @interface SVGRectElement ()
 
-//void CGPathAddRoundedRect (CGMutablePathRef path, CGRect rect, CGFloat radiusX, CGFloat radiusY);
+#if __IPHONE_OS_VERSION_MAX_ALLOWED < __IPHONE_7_0 
+void CGPathAddRoundedRect (CGMutablePathRef path, CGRect rect, CGFloat radiusX, CGFloat radiusY);
+#endif
 
 @end
 
@@ -22,44 +24,47 @@
 @synthesize rx = _rx;
 @synthesize ry = _ry;
 
+#if __IPHONE_OS_VERSION_MAX_ALLOWED < __IPHONE_7_0 
 // adapted from http://www.cocoanetics.com/2010/02/drawing-rounded-rectangles/
-//void CGPathAddRoundedRect (CGMutablePathRef path, CGRect rect, CGFloat radiusX, CGFloat radiusY) {
-//	CGRect innerRect = CGRectInset(rect, radiusX, radiusY);
-//	
-//	CGFloat innerRight = innerRect.origin.x + innerRect.size.width;
-//	CGFloat right = rect.origin.x + rect.size.width;
-//	CGFloat innerBottom = innerRect.origin.y + innerRect.size.height;
-//	CGFloat bottom = rect.origin.y + rect.size.height;
-//	
-//	CGFloat innerTop = innerRect.origin.y;
-//	CGFloat top = rect.origin.y;
-//	CGFloat innerLeft = innerRect.origin.x;
-//	CGFloat left = rect.origin.x;
-//	
-//	CGPathMoveToPoint(path, NULL, innerLeft, top);
-//	
-//	CGPathAddLineToPoint(path, NULL, innerRight, top);
-//	/** c.f http://stackoverflow.com/a/12152442/153422 */
-//	CGAffineTransform t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerRight, innerTop));
-//	CGPathAddArc(path, &t, 0, 0, radiusX, -M_PI_2, 0, false);
-//	
-//	CGPathAddLineToPoint(path, NULL, right, innerBottom);
-//	/** c.f http://stackoverflow.com/a/12152442/153422 */
-//	t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerRight, innerBottom));
-//	CGPathAddArc(path, &t, 0, 0, radiusX, 0, M_PI_2, false);
-//	
-//	CGPathAddLineToPoint(path, NULL, innerLeft, bottom);
-//	/** c.f http://stackoverflow.com/a/12152442/153422 */
-//	t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerLeft, innerBottom));
-//	CGPathAddArc(path, &t, 0, 0, radiusX, M_PI_2, M_PI, false);
-//	
-//	CGPathAddLineToPoint(path, NULL, left, innerTop);
-//	/** c.f http://stackoverflow.com/a/12152442/153422 */
-//	t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerLeft, innerTop));
-//	CGPathAddArc(path, &t, 0, 0, radiusX, M_PI, 3*M_PI_2, false);
-//	
-//	CGPathCloseSubpath(path);
-//}
+
+void CGPathAddRoundedRect (CGMutablePathRef path, CGRect rect, CGFloat radiusX, CGFloat radiusY) {
+	CGRect innerRect = CGRectInset(rect, radiusX, radiusY);
+	
+	CGFloat innerRight = innerRect.origin.x + innerRect.size.width;
+	CGFloat right = rect.origin.x + rect.size.width;
+	CGFloat innerBottom = innerRect.origin.y + innerRect.size.height;
+	CGFloat bottom = rect.origin.y + rect.size.height;
+	
+	CGFloat innerTop = innerRect.origin.y;
+	CGFloat top = rect.origin.y;
+	CGFloat innerLeft = innerRect.origin.x;
+	CGFloat left = rect.origin.x;
+	
+	CGPathMoveToPoint(path, NULL, innerLeft, top);
+	
+	CGPathAddLineToPoint(path, NULL, innerRight, top);
+	/** c.f http://stackoverflow.com/a/12152442/153422 */
+	CGAffineTransform t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerRight, innerTop));
+	CGPathAddArc(path, &t, 0, 0, radiusX, -M_PI_2, 0, false);
+	
+	CGPathAddLineToPoint(path, NULL, right, innerBottom);
+	/** c.f http://stackoverflow.com/a/12152442/153422 */
+	t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerRight, innerBottom));
+	CGPathAddArc(path, &t, 0, 0, radiusX, 0, M_PI_2, false);
+	
+	CGPathAddLineToPoint(path, NULL, innerLeft, bottom);
+	/** c.f http://stackoverflow.com/a/12152442/153422 */
+	t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerLeft, innerBottom));
+	CGPathAddArc(path, &t, 0, 0, radiusX, M_PI_2, M_PI, false);
+	
+	CGPathAddLineToPoint(path, NULL, left, innerTop);
+	/** c.f http://stackoverflow.com/a/12152442/153422 */
+	t = CGAffineTransformConcat( CGAffineTransformMakeScale(1.0, radiusY/radiusX), CGAffineTransformMakeTranslation(innerLeft, innerTop));
+	CGPathAddArc(path, &t, 0, 0, radiusX, M_PI, 3*M_PI_2, false);
+	
+	CGPathCloseSubpath(path);
+}
+#endif
 
 - (void)postProcessAttributesAddingErrorsTo:(SVGKParseResult *)parseResult {
 	[super postProcessAttributesAddingErrorsTo:parseResult];
@@ -104,8 +109,11 @@
 		else if( radiusXPixels == 0 && radiusYPixels > 0 ) // if RX unspecified, make it equal to RY
 			radiusXPixels = radiusYPixels;
 		
-		//CGPathAddRoundedRect(path, rect, radiusXPixels, radiusYPixels);
-        CGPathAddRect(path, NULL, rect);
+		CGPathAddRoundedRect(path,
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_7_0 
+							 nil,
+#endif
+							 rect, radiusXPixels, radiusYPixels);
 	}
 	self.pathForShapeInRelativeCoords = path;
 	CGPathRelease(path);

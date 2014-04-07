@@ -6,6 +6,7 @@
 }
 
 @synthesize SVGImage = _SVGImage;
+@synthesize showBorder;
 
 //self.backgroundColor = [UIColor clearColor];
 
@@ -32,6 +33,8 @@
 	if( newImage == _SVGImage )
 		return;
 	
+	self.startRenderTime = self.endRenderTime = nil; // set to nil, so that watchers know it hasn't loaded yet
+	
 	/** 1: remove old */
 	if( _SVGImage != nil )
 	{
@@ -46,7 +49,9 @@
 	if( _SVGImage != nil )
 	{
 		[_SVGImage retain];
+		self.startRenderTime = [NSDate date];
 		[self addSublayer:_SVGImage.CALayerTree];
+		self.endRenderTime = [NSDate date];
 	}
 }
 

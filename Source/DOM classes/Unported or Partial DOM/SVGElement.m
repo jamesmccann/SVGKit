@@ -72,7 +72,7 @@
 		
 	if( isTagAllowedToBeAViewport && isTagDefiningAViewport )
 	{
-		NSLog(@"[%@] WARNING: setting self (tag = %@) to be a viewport", [self class], self.tagName );
+		DDLogVerbose(@"[%@] WARNING: setting self (tag = %@) to be a viewport", [self class], self.tagName );
 		self.viewportElement =  self;
 	}
 	else
@@ -137,19 +137,38 @@
 					currentAncestor = currentAncestor.parentNode;
 			}
 			
-			NSAssert( firstAncestorThatIsAnyKindOfSVGElement != nil, @"This node has no valid SVG tags as ancestor, but it's not an <svg> tag, so this is an impossible SVG file" );
-			
-			
-			if( [firstAncestorThatIsAnyKindOfSVGElement isKindOfClass:[SVGSVGElement class]] )
-				self.rootOfCurrentDocumentFragment = (SVGSVGElement*) firstAncestorThatIsAnyKindOfSVGElement;
+			if( newParent == nil )
+			{
+				/** We've set the parent to nil, thereby "orphaning" this Node and the tree underneath it.
+				 
+				 This usually happens when you remove a Node from its parent.
+				 
+				 I'm not sure what the spec expects at that point - you have a valid DOM tree, but *not* a valid SVG fragment;
+				 or maybe it is valid, for some special-case kind of SVG fragment definition?
+				 
+				 TODO: this may also relate to SVG <use> nodes and instancing: if you're fixing that code, check this comment to see if you can improve it.
+				 
+				 For now: we simply "do nothing but set everything to nil"
+				 */
+				DDLogWarn( @"SVGElement has had its parent set to nil; this makes the element and tree beneath it no-longer-valid SVG data; this may require fix-up if you try to re-add that SVGElement or any of its children back to an existing/new SVG tree");
+				self.rootOfCurrentDocumentFragment = nil;
+			}
 			else
-				self.rootOfCurrentDocumentFragment = firstAncestorThatIsAnyKindOfSVGElement.rootOfCurrentDocumentFragment;
-			
-			[self reCalculateAndSetViewportElementReferenceUsingFirstSVGAncestor:firstAncestorThatIsAnyKindOfSVGElement];
-			
+			{
+				NSAssert( firstAncestorThatIsAnyKindOfSVGElement != nil, @"This node has no valid SVG tags as ancestor, but it's not an <svg> tag, so this is an impossible SVG file" );
+				
+				
+				if( [firstAncestorThatIsAnyKindOfSVGElement isKindOfClass:[SVGSVGElement class]] )
+					self.rootOfCurrentDocumentFragment = (SVGSVGElement*) firstAncestorThatIsAnyKindOfSVGElement;
+				else
+					self.rootOfCurrentDocumentFragment = firstAncestorThatIsAnyKindOfSVGElement.rootOfCurrentDocumentFragment;
+				
+				[self reCalculateAndSetViewportElementReferenceUsingFirstSVGAncestor:firstAncestorThatIsAnyKindOfSVGElement];
+				
 #if DEBUG_SVG_ELEMENT_PARSING
-			NSLog(@"viewport Element = %@ ... for node/element = %@", self.viewportElement, self.tagName);
+				DDLogVerbose(@"viewport Element = %@ ... for node/element = %@", self.viewportElement, self.tagName);
 #endif
+			}
 		}
 	}
 }
@@ -213,7 +232,7 @@
 	 
 	 * skewY(<skew-angle>), which specifies a skew transformation along the y-axis.
 	 */
-	if( [[self getAttribute:@"transform"] length] > 0 )
+	if( [[self getAttribute:@"transform"] length] > 0  || [[self getAttribute:@"gradientTransform"] length] > 0)
 	{
 		if( [self conformsToProtocol:@protocol(SVGTransformable)] )
 		{
@@ -225,9 +244,12 @@
 		 The individual transform definitions are separated by whitespace and/or a comma. 
 		 */
 		NSString* value = [self getAttribute:@"transform"];
+            if (!value.length) {
+                value = [self getAttribute:@"gradientTransform"];
+            }
 		
 #if !(TARGET_OS_IPHONE) && ( !defined( __MAC_10_7 ) || __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6_7 )
-		NSLog(@"[%@] WARNING: the transform attribute requires OS X 10.7 or above (we need Regular Expressions! Apple was slow to add them :( ). Ignoring TRANSFORMs in SVG!", [self class] );
+		DDLogVerbose(@"[%@] WARNING: the transform attribute requires OS X 10.7 or above (we need Regular Expressions! Apple was slow to add them :( ). Ignoring TRANSFORMs in SVG!", [self class] );
 #else
 		NSError* error = nil;
 		NSRegularExpression* regexpTransformListItem = [NSRegularExpression regularExpressionWithPattern:@"[^\\(\\),]*\\([^\\)]*" options:0 error:&error]; // anything except space and brackets ... followed by anything except open bracket ... plus anything until you hit a close bracket
@@ -237,12 +259,12 @@
 		{
 			NSString* transformString = [value substringWithRange:[result range]];
 			
-			//EXTREME DEBUG: NSLog(@"[%@] DEBUG: found a transform element (should be command + open bracket + args + close bracket) = %@", [self class], transformString);
+			//EXTREME DEBUG: DDLogVerbose(@"[%@] DEBUG: found a transform element (should be command + open bracket + args + close bracket) = %@", [self class], transformString);
 			
 			NSRange loc = [transformString rangeOfString:@"("];
 			if( loc.length == 0 )
 			{
-				NSLog(@"[%@] ERROR: input file is illegal, has an item in the SVG transform attribute which has no open-bracket. Item = %@, transform attribute value = %@", [self class], transformString, value );
+				DDLogError(@"[%@] ERROR: input file is illegal, has an item in the SVG transform attribute which has no open-bracket. Item = %@, transform attribute value = %@", [self class], transformString, value );
 				return;
 			}
 			NSString* command = [transformString substringToIndex:loc.location];
@@ -251,7 +273,7 @@
 			/** if you get ", " (comma AND space), Apple sends you an extra 0-length match - "" - between your args. We strip that here */
 			parameterStrings = [parameterStrings filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]];
 			
-			//EXTREME DEBUG: NSLog(@"[%@] DEBUG: found parameters = %@", [self class], parameterStrings);
+			//EXTREME DEBUG: DDLogVerbose(@"[%@] DEBUG: found parameters = %@", [self class], parameterStrings);
 			
 			command = [command stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@" "]];
 			
@@ -314,7 +336,7 @@
 					selfTransformable.transform = CGAffineTransformConcat( nt, selfTransformable.transform ); // Apple's method appears to be backwards, and not doing what Apple's docs state
 					} else
 					{
-					NSLog(@"[%@] ERROR: input file is illegal, has an SVG matrix transform attribute without the required 1 or 3 parameters. Item = %@, transform attribute value = %@", [self class], transformString, value );
+					DDLogError(@"[%@] ERROR: input file is illegal, has an SVG matrix transform attribute without the required 1 or 3 parameters. Item = %@, transform attribute value = %@", [self class], transformString, value );
 					return;
 				}
 			}
@@ -344,7 +366,7 @@
 			}
 		}];
 		
-		//DEBUG: NSLog(@"[%@] Set local / relative transform = (%2.2f, %2.2f // %2.2f, %2.2f) + (%2.2f, %2.2f translate)", [self class], selfTransformable.transform.a, selfTransformable.transform.b, selfTransformable.transform.c, selfTransformable.transform.d, selfTransformable.transform.tx, selfTransformable.transform.ty );
+		//DEBUG: DDLogVerbose(@"[%@] Set local / relative transform = (%2.2f, %2.2f // %2.2f, %2.2f) + (%2.2f, %2.2f translate)", [self class], selfTransformable.transform.a, selfTransformable.transform.b, selfTransformable.transform.c, selfTransformable.transform.d, selfTransformable.transform.tx, selfTransformable.transform.ty );
 #endif
 		}
 	}
@@ -389,6 +411,64 @@
 	return self;
 }
 
+- (NSRange) nextSelectorRangeFromText:(NSString *) selectorText startFrom:(NSRange) previous
+{
+    NSCharacterSet *alphaNum = [NSCharacterSet alphanumericCharacterSet];
+	NSCharacterSet *selectorStart = [NSCharacterSet characterSetWithCharactersInString:@"#."];
+    
+    NSInteger start = -1;
+    NSUInteger end = 0;
+    for( NSUInteger i = previous.location + previous.length; i < selectorText.length; i++ )
+    {
+        unichar c = [selectorText characterAtIndex:i];
+        if( [selectorStart characterIsMember:c] )
+        {
+            start = i;
+        }
+        else if( [alphaNum characterIsMember:c] )
+        {
+            if( start == -1 )
+                start = i;
+            end = i;
+        }
+        else if( start != -1 )
+        {
+            break;
+        }
+    }
+    
+    if( start != -1 )
+        return NSMakeRange(start, end + 1 - start);
+    else
+        return NSMakeRange(NSNotFound, -1);
+}
+
+- (BOOL) selector:(NSString *)selector appliesTo:(SVGElement *) element
+{
+    if( [selector characterAtIndex:0] == '.' )
+        return element.className != nil && [element.className isEqualToString:[selector substringFromIndex:1]];
+    else if( [selector characterAtIndex:0] == '#' )
+        return element.identifier != nil && [element.identifier isEqualToString:[selector substringFromIndex:1]];
+    else
+        return element.nodeName != nil && [element.nodeName isEqualToString:selector];
+}
+
+- (BOOL) styleRule:(CSSStyleRule *) styleRule appliesTo:(SVGElement *) element
+{
+    NSRange nextRule = [self nextSelectorRangeFromText:styleRule.selectorText startFrom:NSMakeRange(0, 0)];
+    if( nextRule.location == NSNotFound )
+        return NO;
+    
+    while( nextRule.location != NSNotFound )
+    {
+        if( ![self selector:[styleRule.selectorText substringWithRange:nextRule] appliesTo:element] )
+            return NO;
+        
+        nextRule = [self nextSelectorRangeFromText:styleRule.selectorText startFrom:nextRule];
+    }
+    return YES;
+}
+
 #pragma mark - CSS cascading special attributes
 -(NSString*) cascadedValueForStylableProperty:(NSString*) stylableProperty
 {
@@ -415,33 +495,30 @@
 			return localStyleValue;
 		else
 		{
-			if( self.className != nil )
-			{
-				/** we have a locally declared CSS class; let's go hunt for it in the document's stylesheets */
-				
-				@autoreleasepool /** DOM / CSS is insanely verbose, so this is likely to generate a lot of crud objects */
-				{
-					for( StyleSheet* genericSheet in self.rootOfCurrentDocumentFragment.styleSheets.internalArray ) // because it's far too much effort to use CSS's low-quality iteration here...
-					{
-						if( [genericSheet isKindOfClass:[CSSStyleSheet class]])
-						{
-							CSSStyleSheet* cssSheet = (CSSStyleSheet*) genericSheet;
-							
-							for( CSSRule* genericRule in cssSheet.cssRules.internalArray)
-							{
-								if( [genericRule isKindOfClass:[CSSStyleRule class]])
-								{
-									CSSStyleRule* styleRule = (CSSStyleRule*) genericRule;
-									
-									if( [styleRule.selectorText isEqualToString:self.className] )
-									{
-										return [styleRule.style getPropertyValue:stylableProperty];
-									}
-								}
-							}
-						}
-					}
-				}
+            /** we have a locally declared CSS class; let's go hunt for it in the document's stylesheets */
+            
+            @autoreleasepool /** DOM / CSS is insanely verbose, so this is likely to generate a lot of crud objects */
+            {
+                for( StyleSheet* genericSheet in self.rootOfCurrentDocumentFragment.styleSheets.internalArray ) // because it's far too much effort to use CSS's low-quality iteration here...
+                {
+                    if( [genericSheet isKindOfClass:[CSSStyleSheet class]])
+                    {
+                        CSSStyleSheet* cssSheet = (CSSStyleSheet*) genericSheet;
+                        
+                        for( CSSRule* genericRule in cssSheet.cssRules.internalArray)
+                        {
+                            if( [genericRule isKindOfClass:[CSSStyleRule class]])
+                            {
+                                CSSStyleRule* styleRule = (CSSStyleRule*) genericRule;
+                                
+                                if( [self styleRule:styleRule appliesTo:self] )
+                                {
+                                    return [styleRule.style getPropertyValue:stylableProperty];
+                                }
+                            }
+                        }
+                    }
+                }
 			}
 			
 			/** either there's no class *OR* it found no match for the class in the stylesheets */

@@ -18,6 +18,7 @@
 @synthesize value;
 @synthesize valueInSpecifiedUnits;
 @synthesize valueAsString;
+@synthesize internalCSSPrimitiveValue;
 
 - (void)dealloc {
     self.valueAsString = nil;
@@ -141,7 +142,8 @@ static float cachedDevicePixelsPerInch;
 		return 163.0f;
 	
 	if( [platform hasPrefix:@"iPhone4"]
-	|| [platform hasPrefix:@"iPhone5"])
+	|| [platform hasPrefix:@"iPhone5"]
+	|| [platform hasPrefix:@"iPhone6"])
 		return 326.0f;
 	
 	if( [platform hasPrefix:@"iPhone"]) // catch-all for higher-end devices not yet existing
@@ -179,7 +181,7 @@ static float cachedDevicePixelsPerInch;
 	
 	if( [platform hasPrefix:@"x86_64"])
 	{
-		NSLog(@"[%@] WARNING: you are running on the simulator; it's impossible for us to calculate centimeter/millimeter/inches units correctly", [self class]);
+		DDLogCWarn(@"[%@] WARNING: you are running on the simulator; it's impossible for us to calculate centimeter/millimeter/inches units correctly", [self class]);
 		return 132.0f; // Simulator, running on desktop machine
 	}
 	
