@@ -23,7 +23,6 @@
 @synthesize ry = _ry;
 
 // adapted from http://www.cocoanetics.com/2010/02/drawing-rounded-rectangles/
-
 //void CGPathAddRoundedRect (CGMutablePathRef path, CGRect rect, CGFloat radiusX, CGFloat radiusY) {
 //	CGRect innerRect = CGRectInset(rect, radiusX, radiusY);
 //	
@@ -105,7 +104,8 @@
 		else if( radiusXPixels == 0 && radiusYPixels > 0 ) // if RX unspecified, make it equal to RY
 			radiusXPixels = radiusYPixels;
 		
-//		CGPathAddRoundedRect(path, rect, radiusXPixels, radiusYPixels);
+		//CGPathAddRoundedRect(path, rect, radiusXPixels, radiusYPixels);
+        CGPathAddRect(path, NULL, rect);
 	}
 	self.pathForShapeInRelativeCoords = path;
 	CGPathRelease(path);
