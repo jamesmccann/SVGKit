@@ -368,33 +368,33 @@ CATextLayer *textLayerForLastTappedLayer;
  */
 -(void) preProcessImageCheckWorkaroundAppleBugInGradientImages:(ImageLoadingOptions*) options
 {
-	if(
-	   [name  isEqualToString:@"Monkey"] // Monkey uses layer-animations, so REQUIRES the layered version of SVGKImageView
-	   || [name isEqualToString:@"RainbowWing"] // RainbodWing uses gradient-fills, so REQUIRES the layered version of SVGKImageView
-	   || [name isEqualToString:@"RotText"] // SVGKFastImageView is really slow
-	   || [name isEqualToString:@"Floorplan_Zurich.svg"] // SVGKFastImageView is really slow
-	   )
-	{
-		/**
-		 
-		 NB: special-case handling here -- this is included AS AN EXAMPLE so you can see the differences.
-		 
-		 MONKEY.SVG -- CAAnimation of layers
-		 -----
-		 The problem: Apple's code doesn't allow us to support CoreAnimation *and* make image loading easy.
-		 The solution: there are two versions of SVGKImageView - a "normal" one, and a "weaker one that supports CoreAnimation"
-		 
-		 In this demo, we setup the Monkey.SVG to allow layer-based animation...
-		 
-		 
-		 RAINBOWWING.SVG -- Gradient-fills of shapes
-		 -----
-		 The problem: Apple's renderInContext has a major bug where it ignores CALayer masks
-		 The solution: there are two versions of SVGKImageView - a "normal" one, and a "weaker one that doesnt use renderInContext"
-		 
-		 */
-		options.requiresLayeredImageView = true;
-	}
+//	if(
+//	   [name  isEqualToString:@"Monkey"] // Monkey uses layer-animations, so REQUIRES the layered version of SVGKImageView
+//	   || [name isEqualToString:@"RainbowWing"] // RainbodWing uses gradient-fills, so REQUIRES the layered version of SVGKImageView
+//	   || [name isEqualToString:@"RotText"] // SVGKFastImageView is really slow
+//	   || [name isEqualToString:@"Floorplan_Zurich.svg"] // SVGKFastImageView is really slow
+//	   )
+//	{
+//		/**
+//		 
+//		 NB: special-case handling here -- this is included AS AN EXAMPLE so you can see the differences.
+//		 
+//		 MONKEY.SVG -- CAAnimation of layers
+//		 -----
+//		 The problem: Apple's code doesn't allow us to support CoreAnimation *and* make image loading easy.
+//		 The solution: there are two versions of SVGKImageView - a "normal" one, and a "weaker one that supports CoreAnimation"
+//		 
+//		 In this demo, we setup the Monkey.SVG to allow layer-based animation...
+//		 
+//		 
+//		 RAINBOWWING.SVG -- Gradient-fills of shapes
+//		 -----
+//		 The problem: Apple's renderInContext has a major bug where it ignores CALayer masks
+//		 The solution: there are two versions of SVGKImageView - a "normal" one, and a "weaker one that doesnt use renderInContext"
+//		 
+//		 */
+//		options.requiresLayeredImageView = true;
+//	}
 }
 
 - (void)loadResource:(NSString *)name
